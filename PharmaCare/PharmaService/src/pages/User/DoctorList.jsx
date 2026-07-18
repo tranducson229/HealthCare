@@ -1,74 +1,45 @@
 import React, { useState, useEffect } from 'react';
 import DoctorListGrid from "../../components/DoctorList";
+import { db } from '../../firebaseConfig'; // Đảm bảo đường dẫn này trỏ đúng tới file cấu hình Firebase của bạn
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function DoctorListPage() {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate loading data from Firebase/API
-    const doctorData = [
-      {
-        id: 1,
-        name: "BS. Trần Văn A",
-        specialty: "Nội tổng quát",
-        experience: "10 năm kinh nghiệm",
-        rating: 4.8,
-        reviews: 124,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
-      },
-      {
-        id: 2,
-        name: "BS. Nguyễn Thị B",
-        specialty: "Da liễu",
-        experience: "8 năm kinh nghiệm",
-        rating: 4.6,
-        reviews: 98,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
-      },
-      {
-        id: 3,
-        name: "BS. Lê Văn C",
-        specialty: "Tim mạch",
-        experience: "12 năm kinh nghiệm",
-        rating: 4.9,
-        reviews: 210,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
-      },
-      {
-        id: 4,
-        name: "BS. Phạm Thị D",
-        specialty: "Nhi khoa",
-        experience: "7 năm kinh nghiệm",
-        rating: 4.7,
-        reviews: 76,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
-      },
-      {
-        id: 5,
-        name: "BS. Hoàng Văn E",
-        specialty: "Hô hấp",
-        experience: "9 năm kinh nghiệm",
-        rating: 4.85,
-        reviews: 156,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
-      },
-      {
-        id: 6,
-        name: "BS. Vũ Thị F",
-        specialty: "Mắt",
-        experience: "6 năm kinh nghiệm",
-        rating: 4.5,
-        reviews: 82,
-        img: "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"
+    const fetchDoctors = async () => {
+      try {
+        // Truy vấn vào bảng users, lấy những user có role là 'doctor'
+        const q = query(collection(db, "users"), where("role", "==", "doctor"));
+        const querySnapshot = await getDocs(q);
+        
+        const doctorList = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          // Chuẩn hóa dữ liệu Firebase để khớp với format mà DoctorListGrid cần
+          doctorList.push({ 
+            id: doc.id, 
+            name: data.displayName ? `BS. ${data.displayName}` : (data.name || "BS. Đang cập nhật"),
+            specialty: data.specialty || "Đa khoa",
+            experience: data.experience || "Nhiều năm kinh nghiệm",
+            rating: data.rating || 5.0,
+            reviews: data.reviews || Math.floor(Math.random() * 100) + 10, // Giả lập số lượt đánh giá nếu db chưa có
+            img: data.photoURL || data.image || "https://cdn-icons-png.flaticon.com/512/3774/3774299.png",
+            ...data // Giữ lại toàn bộ các trường gốc khác nếu có
+          });
+        });
+        
+        setDoctors(doctorList);
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách bác sĩ:", error);
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    // Simulate loading delay
-    setTimeout(() => {
-      setDoctors(doctorData);
-      setLoading(false);
-    }, 500);
+    fetchDoctors();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   if (loading) {
@@ -82,8 +53,11 @@ export default function DoctorListPage() {
         justifyContent: 'center'
       }}>
         <div>
-          <div style={{ fontSize: '3rem', marginBottom: '20px' }}>⏳</div>
-          <h3>Đang tải danh sách bác sĩ...</h3>
+          {/* Thay icon đồng hồ cát bằng icon xoay vòng cho hiệu ứng mượt hơn */}
+          <div style={{ fontSize: '3rem', marginBottom: '20px', color: '#007bff' }}>
+            <i className="fas fa-spinner fa-spin"></i>
+          </div>
+          <h3 style={{ color: '#666' }}>Đang tải danh sách bác sĩ...</h3>
         </div>
       </div>
     );
@@ -135,8 +109,8 @@ export default function DoctorListPage() {
           marginBottom: '50px'
         }}>
           {[
-            { label: 'Tổng số bác sĩ', value: doctors.length, icon: '👥' },
-            { label: 'Độ hài lòng trung bình', value: '4.8/5', icon: '⭐' },
+            { label: 'Tổng số bác sĩ', value: doctors.length, icon: '👥' }, // Lấy số lượng thực tế từ Database
+            { label: 'Độ hài lòng trung bình', value: '4.9/5', icon: '⭐' },
             { label: 'Kinh nghiệm trung bình', value: '8+ năm', icon: '📚' }
           ].map((stat, idx) => (
             <div key={idx} style={{
@@ -145,8 +119,12 @@ export default function DoctorListPage() {
               borderRadius: '15px',
               textAlign: 'center',
               boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
-              border: '1px solid #e9ecef'
-            }}>
+              border: '1px solid #e9ecef',
+              transition: 'transform 0.3s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-5px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+            >
               <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>{stat.icon}</div>
               <div style={{
                 fontSize: '1.8rem',
@@ -178,7 +156,8 @@ export default function DoctorListPage() {
               padding: '60px 20px',
               color: '#999'
             }}>
-              <h3>Không có bác sĩ</h3>
+              <i className="fas fa-user-md" style={{ fontSize: '4rem', color: '#ddd', marginBottom: '15px' }}></i>
+              <h3>Hệ thống hiện chưa có bác sĩ nào</h3>
               <p>Vui lòng thử lại sau</p>
             </div>
           )}

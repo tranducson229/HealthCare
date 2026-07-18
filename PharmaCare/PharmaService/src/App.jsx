@@ -1,6 +1,8 @@
 import { Routes, Route, Outlet } from "react-router-dom";
 import "./App.css";
 
+import ImportData from './ImportData';
+
 // --- 1. Import Header & Footer ---
 import Header from "./components/Header";
 import Footer from "./components/Footer";
@@ -38,6 +40,7 @@ import UploadPrescription from "./pages/User/UploadPrescription";
 import MyHealth from "./pages/User/Profile/MyHealth";
 import PrescriptionDetail from "./pages/User/PrescriptionDetail";
 import Viewprofiledoctor from "./pages/User/Profile/Viewprofiledoctor";
+import DoctorList from "./pages/User/DoctorList"
 
 // Chat User
 import UserChat from "./pages/User/Chat/UserChat";
@@ -85,6 +88,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/pharmacist/register" element={<PharmacistRegister />} />
+        <Route path="/import-secret-data" element={<ImportData />} />
 
         {/* --- NHÓM 2: KHÁCH HÀNG (Dùng Header/Footer chung) --- */}
         <Route path="/" element={<MainLayout />}>
@@ -93,6 +97,7 @@ function App() {
           <Route path="products/:id" element={<ProductDetail />} />
           <Route path="cart" element={<Cart />} />
           <Route path="appointment" element={<Appointment />} />
+          <Route path="doctors" element={<DoctorList />} />
           <Route path="myhealth" element={<MyHealth />} />
           <Route path="checkout" element={<Checkout />} />
           <Route path="/user/prescription/:id" element={<PrescriptionDetail />} />

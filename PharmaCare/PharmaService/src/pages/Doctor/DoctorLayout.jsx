@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { auth, db } from '../../firebaseConfig'; 
 import { signOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { listenToNotifications, markAsRead } from '../../services/notificationService'; // Đảm bảo đã import markAsRead
+import { listenToNotifications, markAsRead } from '../../services/notificationService';
 import './DoctorLayout.css'; 
 
 // URL âm thanh (Ví dụ)
@@ -11,6 +11,7 @@ const ONLINE_SOUND_URL = "https://assets.mixkit.co/active_storage/sfx/2869/2869-
 
 const DoctorLayout = () => {
   const [doctor, setDoctor] = useState(null);
+  const [loading, setLoading] = useState(true); // MỚI: State để quản lý quá trình tải dữ liệu
   const [isOnline, setIsOnline] = useState(true);
   
   const [showDropdown, setShowDropdown] = useState(false);
@@ -28,18 +29,25 @@ const DoctorLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // --- MỚI: Xử lý loading và try...catch khi lấy dữ liệu bác sĩ ---
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const docRef = doc(db, "users", user.uid);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setDoctor({ ...user, ...docSnap.data() });
+      try {
+        if (user) {
+          const docRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setDoctor({ ...user, ...docSnap.data() });
+          } else {
+            setDoctor(user);
+          }
         } else {
-          setDoctor(user);
+          navigate('/login');
         }
-      } else {
-        navigate('/login');
+      } catch (error) {
+        console.error("Lỗi khi lấy thông tin bác sĩ:", error);
+      } finally {
+        setLoading(false); // Dù thành công hay lỗi thì cũng phải tắt loading
       }
     });
     return () => unsubscribe();
@@ -86,9 +94,8 @@ const DoctorLayout = () => {
     setShowDropdown(false);
   };
 
-  // --- MỚI: Xử lý khi bấm vào 1 thông báo cụ thể ---
   const handleNotificationClick = async (notif) => {
-    // 1. Đánh dấu đã đọc (Giảm số thông báo ngay lập tức trên UI và DB)
+    // 1. Đánh dấu đã đọc
     if (!notif.isRead) {
       await markAsRead(notif.id);
     }
@@ -96,21 +103,30 @@ const DoctorLayout = () => {
     // 2. Đóng dropdown
     setShowNotifDropdown(false);
 
-    // 3. Chuyển sang trang Chat và mang theo ID người gửi để mở room chat
-    // Lưu ý: Trang DoctorChat cần xử lý `location.state.senderId` để focus đúng người
+    // 3. Chuyển sang trang Chat và mang theo ID người gửi
     navigate('/doctor/chat', { 
       state: { 
-        selectedUserId: notif.senderId // Giả sử trong notif có lưu senderId người gửi
+        selectedUserId: notif.senderId 
       } 
     });
   };
 
-  // --- MỚI: Xử lý khi bấm "Xem tất cả" ---
   const handleViewAll = () => {
     setShowNotifDropdown(false);
-    navigate('/doctor/chat'); // Chỉ chuyển trang bình thường
+    navigate('/doctor/chat'); 
   };
 
+  // --- MỚI: Hiển thị giao diện chờ khi đang lấy dữ liệu ---
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', backgroundColor: '#f4f7f6', color: '#666' }}>
+        <i className="fas fa-spinner fa-spin" style={{ fontSize: '3rem', color: '#007bff', marginBottom: '15px' }}></i>
+        <h2>Đang tải dữ liệu hệ thống...</h2>
+      </div>
+    );
+  }
+
+  // Đảm bảo có dữ liệu bác sĩ mới hiển thị khung giao diện
   if (!doctor) return null;
 
   return (
@@ -167,7 +183,6 @@ const DoctorLayout = () => {
               <span className="status-text">{isOnline ? 'Sẵn sàng' : 'Vắng mặt'}</span>
             </div>
 
-            {/* --- PHẦN THÔNG BÁO --- */}
             <div className="notif-box">
               <div 
                 className={`notif-icon-wrapper ${isShaking ? 'shake-animation' : ''}`} 
@@ -192,7 +207,6 @@ const DoctorLayout = () => {
                         <div 
                           key={n.id} 
                           className={`notif-item ${!n.isRead ? 'unread' : ''}`}
-                          // --- MỚI: Gọi hàm xử lý click ---
                           onClick={() => handleNotificationClick(n)}
                         >
                           <div className="notif-sender">{n.title || "Hệ thống"}</div>
@@ -206,7 +220,6 @@ const DoctorLayout = () => {
                   </div>
                   
                   {notifications.length > 0 && (
-                    // --- MỚI: Gọi hàm xem tất cả ---
                     <div className="notif-footer" onClick={handleViewAll}>
                       Xem tất cả
                     </div>
@@ -214,14 +227,13 @@ const DoctorLayout = () => {
                 </div>
               )}
             </div>
-            {/* ----------------------- */}
 
             <div className="user-profile" onClick={() => { setShowDropdown(!showDropdown); setShowNotifDropdown(false); }}>
               <div className="user-info">
                 <img src={doctor.photoURL || "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"} alt="Avatar" />
                 <div className="user-text">
-                  <strong>BS. {doctor.displayName}</strong>
-                  <small>Chuyên khoa Nội</small>
+                  <strong>BS. {doctor.displayName || 'Khách'}</strong>
+                  <small>{doctor.specialty || 'Chuyên khoa Nội'}</small>
                 </div>
               </div>
               {showDropdown && (

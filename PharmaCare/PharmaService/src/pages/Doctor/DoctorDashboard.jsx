@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom'; 
+import { auth, db } from '../../firebaseConfig'; // Đảm bảo đường dẫn đúng
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -7,16 +10,78 @@ import {
 
 const DoctorDashboard = () => {
   const navigate = useNavigate();
+  
+  // State quản lý trạng thái tải và dữ liệu thống kê
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState([
+    { title: "Chờ khám", value: "0", icon: "⏳", color: "#e17055", desc: "Bệnh nhân đang đợi" },
+    { title: "Đang tư vấn", value: "0", icon: "💬", color: "#0984e3", desc: "Cuộc hội thoại mở" },
+    { title: "Đã khám xong", value: "0", icon: "✅", color: "#00b894", desc: "Hoàn tất hôm nay" },
+    { title: "Tổng bệnh nhân", value: "0", icon: "👥", color: "#6c5ce7", desc: "Lịch sử tiếp nhận" },
+  ]);
 
-  // --- DỮ LIỆU THỐNG KÊ (MẪU) ---
-  const stats = [
-    { title: "Chờ khám", value: "3", icon: "⏳", color: "#e17055", desc: "Bệnh nhân đang đợi" },
-    { title: "Đang tư vấn", value: "2", icon: "💬", color: "#0984e3", desc: "Cuộc hội thoại mở" },
-    { title: "Đã khám xong", value: "12", icon: "✅", color: "#00b894", desc: "Hoàn tất hôm nay" },
-    { title: "Tổng bệnh nhân", value: "1,204", icon: "👥", color: "#6c5ce7", desc: "Lịch sử tiếp nhận" },
-  ];
+  // --- LOGIC LẤY DỮ LIỆU TỪ FIREBASE ---
+  useEffect(() => {
+    const fetchDashboardData = async (doctorId) => {
+      try {
+        const today = new Date().toISOString().split('T')[0]; // Định dạng YYYY-MM-DD
 
-  // Biểu đồ hoạt động khám bệnh
+        // 1. Truy vấn Lịch khám (Appointments)
+        const apptQuery = query(collection(db, "appointments"), where("doctorId", "==", doctorId));
+        const apptSnap = await getDocs(apptQuery);
+        
+        let pendingCount = 0;
+        let completedTodayCount = 0;
+        let uniquePatients = new Set();
+        
+        apptSnap.forEach(doc => {
+          const data = doc.data();
+          // Đếm tổng bệnh nhân duy nhất
+          if (data.patientId) uniquePatients.add(data.patientId);
+          
+          // Đếm lịch chờ khám
+          if (data.status === 'pending' || data.status === 'confirmed') {
+            pendingCount++;
+          }
+          // Đếm lịch đã hoàn tất hôm nay
+          if (data.status === 'completed' && data.date === today) {
+            completedTodayCount++;
+          }
+        });
+
+        // 2. Truy vấn Chat/Tư vấn đang hoạt động
+        // (Giả sử bạn có collection 'chats' lưu các phiên nhắn tin)
+        const chatQuery = query(collection(db, "chats"), where("doctorId", "==", doctorId));
+        const chatSnap = await getDocs(chatQuery);
+        let activeChatsCount = chatSnap.size; // Có thể thêm where("status", "==", "active") nếu cần
+
+        // Cập nhật lên UI
+        setStats([
+          { title: "Chờ khám", value: pendingCount.toString(), icon: "⏳", color: "#e17055", desc: "Bệnh nhân đang đợi" },
+          { title: "Đang tư vấn", value: activeChatsCount.toString(), icon: "💬", color: "#0984e3", desc: "Cuộc hội thoại mở" },
+          { title: "Đã khám xong", value: completedTodayCount.toString(), icon: "✅", color: "#00b894", desc: "Hoàn tất hôm nay" },
+          { title: "Tổng bệnh nhân", value: uniquePatients.size.toString(), icon: "👥", color: "#6c5ce7", desc: "Lịch sử tiếp nhận" },
+        ]);
+
+      } catch (error) {
+        console.error("Lỗi khi tải dữ liệu Dashboard:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        fetchDashboardData(user.uid);
+      } else {
+        navigate('/login');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  // --- DỮ LIỆU BIỂU ĐỒ (Giữ nguyên mẫu để hiển thị UI đẹp mắt) ---
   const activityData = [
     { name: 'Thứ 2', kham_benh: 20, tu_van: 40 },
     { name: 'Thứ 3', kham_benh: 15, tu_van: 30 },
@@ -27,7 +92,6 @@ const DoctorDashboard = () => {
     { name: 'CN', kham_benh: 5, tu_van: 20 },
   ];
 
-  // Biểu đồ kết quả chẩn đoán
   const outcomeData = [
     { name: 'Kê đơn thuốc', value: 320 },
     { name: 'Tư vấn sức khỏe', value: 150 },
@@ -52,6 +116,16 @@ const DoctorDashboard = () => {
     border: '1px solid #f1f2f6'
   };
 
+  // --- HIỂN THỊ LOADING ---
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', backgroundColor: '#f8f9fa' }}>
+        <i className="fas fa-spinner fa-spin" style={{ fontSize: '3rem', color: '#0984e3', marginBottom: '15px' }}></i>
+        <h3 style={{ color: '#636e72' }}>Đang tổng hợp dữ liệu...</h3>
+      </div>
+    );
+  }
+
   return (
     <div className="doctor-container" style={{ padding: '30px', background: '#f8f9fa', minHeight: '100vh', fontFamily: "'Segoe UI', sans-serif" }}>
       
@@ -63,10 +137,9 @@ const DoctorDashboard = () => {
         {/* QUICK ACTIONS */}
         <div style={{ display: 'flex', gap: '25px', flexWrap: 'wrap', marginTop: '30px' }}>
           
-          {/* Nút 1: Lịch khám (Chính) */}
           <div 
             style={{ ...actionCardStyle, borderLeft: '6px solid #e17055' }}
-            onClick={() => navigate('/doctor/appointments')} // Dẫn tới trang lịch khám
+            onClick={() => navigate('/doctor/appointments')}
             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-5px)'; e.currentTarget.style.boxShadow = '0 8px 25px rgba(225, 112, 85, 0.2)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 15px rgba(0,0,0,0.05)'; }}
           >
@@ -80,7 +153,6 @@ const DoctorDashboard = () => {
             <i className="fas fa-chevron-right" style={{ marginLeft: 'auto', color: '#b2bec3' }}></i>
           </div>
 
-          {/* Nút 2: Tư vấn Chat */}
           <div 
             style={{ ...actionCardStyle, borderLeft: '6px solid #0984e3' }}
             onClick={() => navigate('/doctor/chat')}
@@ -97,7 +169,6 @@ const DoctorDashboard = () => {
             <i className="fas fa-chevron-right" style={{ marginLeft: 'auto', color: '#b2bec3' }}></i>
           </div>
 
-           {/* Nút 3: Bắt đầu khám (Thay thế cho Đơn hàng) */}
            <div 
             style={{ ...actionCardStyle, borderLeft: '6px solid #00b894' }}
             onClick={() => navigate('/doctor/exams')}
