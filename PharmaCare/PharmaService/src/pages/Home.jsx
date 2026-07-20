@@ -12,16 +12,18 @@ const Home = () => {
   const navigate = useNavigate();
   
   const [doctors, setDoctors] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]); // State lưu sản phẩm thật từ Database
 
   useEffect(() => {
-    const q = query(
+    // 1. LẤY DANH SÁCH BÁC SĨ
+    const qDoctors = query(
       collection(db, "users"),
       where("role", "==", "doctor"),
       orderBy("rating", "desc"),
       limit(4)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubDoctors = onSnapshot(qDoctors, (snapshot) => {
       const doctorsList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -37,10 +39,31 @@ const Home = () => {
       console.error("Lỗi lấy danh sách bác sĩ:", error);
     });
 
-    return () => unsubscribe();
+    // 2. LẤY DANH SÁCH SẢN PHẨM BÁN CHẠY
+    // Lưu ý: Nếu DB của bạn chưa có trường 'soldCount', danh sách có thể trống.
+    // Tạm thời bạn có thể bỏ dòng orderBy("soldCount", "desc") đi nếu test chưa ra data nhé!
+    const qProducts = query(
+      collection(db, "products"),
+      // orderBy("soldCount", "desc"), // Mở comment dòng này khi DB bạn đã có trường soldCount
+      limit(8)
+    );
+
+    const unsubProducts = onSnapshot(qProducts, (snapshot) => {
+      const productsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setBestSellers(productsList);
+    }, (error) => {
+      console.error("Lỗi lấy danh sách sản phẩm:", error);
+    });
+
+    return () => {
+      unsubDoctors();
+      unsubProducts();
+    };
   }, []);
 
-  // ĐÃ THÊM dbName (TIẾNG ANH) KHỚP VỚI FIREBASE
   const categories = [
     { id: 1, dbName: "Pain Relievers", name: "Thuốc giảm đau", icon: "💊", color: "#e3f2fd" },
     { id: 2, dbName: "Supplements", name: "Thực phẩm chức năng", icon: "🌿", color: "#e8f5e9" },
@@ -50,20 +73,15 @@ const Home = () => {
     { id: 6, dbName: "Baby Care", name: "Sản phẩm cho bé", icon: "🍼", color: "#fffde7" },
   ];
 
-  const bestSellers = [
-    { id: 1, name: "Paracetamol 500mg", price: "50.000đ", oldPrice: "65.000đ", img: "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/ecommerce/20250613080005-0-P25239.jpg?versionId=9KHZDMjWVuap6VZUff4Qmk2RQ1yCUTJO", discount: "-23%" },
-    { id: 2, name: "Vitamin C 1000mg", price: "120.000đ", oldPrice: "150.000đ", img: "https://production-cdn.pharmacity.io/digital/1080x1080/plain/e-com/images/ecommerce/P25904_1.jpg?v=041215", discount: "-20%" },
-    { id: 3, name: "Dầu cá Omega 3", price: "450.000đ", oldPrice: "500.000đ", img: "https://production-cdn.pharmacity.io/digital/1080x1080/plain/e-com/images/product/20250418083412-0-P25542.jpg?versionId=x4z.3YTjTq4igCORV7gHetqPhmWqO4Ll", discount: "-10%" },
-    { id: 4, name: "Khẩu trang N95", price: "25.000đ", oldPrice: "30.000đ", img: "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/ecommerce/20251105100710-0-P28891.png?versionId=2jUzcZGjIogIJxSdM4zZHpjxE9sagd5C", discount: "-16%" },
-    { id: 5, name: "Nước súc miệng Listerine", price: "95.000đ", oldPrice: "110.000đ", img: "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/ecommerce/20240528093730-0-P17555_1.jpg", discount: "-13%" },
-    { id: 6, name: "Máy đo đường huyết", price: "850.000đ", oldPrice: "1.000.000đ", img: "https://production-cdn.pharmacity.io/digital/1080x1080/plain/e-com/images/promotion_sku_images/20260131104635-0-P19794.png?versionId=TTphOn6d8hE9S_Y5qRP_pfrozwRgmlXt", discount: "-15%" },
-    { id: 7, name: "Sữa bột Pediasure", price: "620.000đ", oldPrice: "680.000đ", img: "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/promotion_sku_images/20260131105039-4-P20532.png?versionId=lHdkX2eaY8l9a800UJXU2gsQob0RpKqE", discount: "-8%" },
-    { id: 8, name: "Kem chống nắng Laroche", price: "380.000đ", oldPrice: "420.000đ", img: "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/promotion_sku_images/20260131105039-3-P18815.png?versionId=ByV7EcekA84PH76LPItLFul77GIdmk9U", discount: "-9%" },
-  ];
-
   const handleAddToCart = (e, product) => {
     e.preventDefault(); 
-    const cleanPrice = parseInt(product.price.replace(/\./g, '').replace('đ', ''));
+    
+    // Xử lý an toàn: Đảm bảo price luôn là số kể cả khi DB đang lưu chuỗi
+    let cleanPrice = product.price;
+    if (typeof cleanPrice === 'string') {
+      cleanPrice = parseInt(cleanPrice.replace(/\./g, '').replace('đ', '')) || 0;
+    }
+    
     const productToAdd = { ...product, price: cleanPrice };
     addToCart(productToAdd);
     toast.success(`Đã thêm "${product.name}" vào giỏ!`, { position: "top-right", autoClose: 2000 });
@@ -113,7 +131,6 @@ const Home = () => {
           {categories.map(cat => (
             <div 
               key={cat.id} 
-              // CHUYỂN HƯỚNG KÈM CẢ DBNAME (để lọc) VÀ NAME (để hiển thị)
               onClick={() => navigate(`/products?category=${encodeURIComponent(cat.dbName)}&title=${encodeURIComponent(cat.name)}`)}
               style={{ 
                 background: cat.color, 
@@ -143,24 +160,75 @@ const Home = () => {
       <section style={{ padding: '60px 20px', background: '#f8f9fa' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h2 style={{ borderLeft: '5px solid #007bff', paddingLeft: '15px' }}>Sản Phẩm Bán Chạy 🔥</h2>
+              <h2 style={{ borderLeft: '5px solid #007bff', paddingLeft: '15px' }}>Sản Phẩm Nổi Bật 🔥</h2>
               <Link to="/products" style={{ color: '#007bff', fontWeight: 'bold', textDecoration: 'none' }}>Xem tất cả →</Link>
           </div>
           <div style={productGridStyle}>
-            {bestSellers.map(product => (
-              <Link to={`/product/${product.id}`} key={product.id} style={{ textDecoration: 'none' }}>
-                <div style={productCardStyle}>
-                  <span style={discountBadgeStyle}>{product.discount}</span>
-                  <div style={productImgContainerStyle}><img src={product.img} alt={product.name} style={productImgStyle} /></div>
-                  <h4 style={productNameStyle}>{product.name}</h4>
-                  <div style={{ marginBottom: '15px', marginTop: 'auto' }}>
-                    <span style={{ color: '#007bff', fontWeight: 'bold', fontSize: '1.2rem' }}>{product.price}</span>
-                    <span style={{ color: '#999', textDecoration: 'line-through', fontSize: '0.9rem', marginLeft: '10px' }}>{product.oldPrice}</span>
-                  </div>
-                  <button className="add-btn" onClick={(e) => handleAddToCart(e, product)} style={addToCartBtnStyle}>+ Thêm vào giỏ</button>
+            {bestSellers.length > 0 ? bestSellers.map(product => (
+              
+              /* 1. ĐÃ THAY THẺ <Link> BẰNG <div> VÀ DÙNG navigate */
+              <div 
+                key={product.id} 
+                onClick={() => navigate(`/products/${product.id}`)}
+                style={{ ...productCardStyle, transition: 'all 0.3s ease', cursor: 'pointer' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-8px)';
+                  e.currentTarget.style.boxShadow = '0 15px 30px rgba(0,0,0,0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 10px rgba(0,0,0,0.05)';
+                }}
+              >
+                {product.discount && <span style={discountBadgeStyle}>{product.discount}</span>}
+                
+                <div style={productImgContainerStyle}>
+                  <img 
+                    src={product.image || product.img || "https://production-cdn.pharmacity.io/digital/425x425/plain/e-com/images/ecommerce/20250613080005-0-P25239.jpg"} 
+                    alt={product.name} 
+                    style={productImgStyle} 
+                  />
                 </div>
-              </Link>
-            ))}
+                
+                <h4 style={{ ...productNameStyle, textDecoration: 'none' }}>{product.name}</h4>
+                
+                <div style={{ marginBottom: '15px', marginTop: 'auto' }}>
+                  <span style={{ color: '#007bff', fontWeight: 'bold', fontSize: '1.2rem', textDecoration: 'none' }}>
+                    {Number(product.price).toLocaleString('vi-VN')}đ
+                  </span>
+                  {product.oldPrice && (
+                    <span style={{ color: '#999', textDecoration: 'line-through', fontSize: '0.9rem', marginLeft: '10px' }}>
+                       {Number(product.oldPrice).toLocaleString('vi-VN')}đ
+                    </span>
+                  )}
+                </div>
+                
+                <button 
+                  className="add-btn" 
+                  onClick={(e) => {
+                    // 2. THÊM stopPropagation ĐỂ KHI BẤM NÚT NÀY KHÔNG BỊ CHUYỂN TRANG
+                    e.stopPropagation(); 
+                    handleAddToCart(e, product);
+                  }} 
+                  style={{ ...addToCartBtnStyle, transition: '0.3s' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#007bff';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#e3f2fd';
+                    e.currentTarget.style.color = '#007bff';
+                  }}
+                >
+                  + Thêm vào giỏ
+                </button>
+              </div>
+
+            )) : (
+              <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: '#999' }}>
+                ⏳ Đang tải danh sách sản phẩm...
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -169,56 +237,22 @@ const Home = () => {
       <section style={{ padding: '70px 20px', background: '#f8f9fa' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           
-          <div style={{ 
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '50px',
-            flexWrap: 'wrap',
-            gap: '15px'
-          }}>
-            <h2 style={{ 
-              borderLeft: '5px solid #007bff',
-              paddingLeft: '15px',
-              fontSize: '28px',
-              fontWeight: 'bold'
-            }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '50px', flexWrap: 'wrap', gap: '15px' }}>
+            <h2 style={{ borderLeft: '5px solid #007bff', paddingLeft: '15px', fontSize: '28px', fontWeight: 'bold' }}>
               Đội Ngũ Bác Sĩ 👨‍⚕️
             </h2>
 
-            <Link 
-              to="/doctors"
-              style={{ 
-                color: '#007bff',
-                fontWeight: 'bold',
-                textDecoration: 'none'
-              }}
-            >
+            <Link to="/doctors" style={{ color: '#007bff', fontWeight: 'bold', textDecoration: 'none' }}>
               Xem danh sách →
             </Link>
           </div>
 
-          <div style={{ 
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-            gap: '30px'
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '30px' }}>
             {doctors.length > 0 ? (
               doctors.map((doctor) => (
                 <div
                   key={doctor.id}
-                  style={{
-                    background: '#ffffff',
-                    padding: '30px 20px',
-                    borderRadius: '20px',
-                    textAlign: 'center',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.06)',
-                    transition: '0.3s',
-                    position: 'relative',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    flexDirection: 'column'
-                  }}
+                  style={{ background: '#ffffff', padding: '30px 20px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.06)', transition: '0.3s', position: 'relative', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}
                   onClick={() => navigate(`/doctor/${doctor.id}`)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-8px)';
@@ -230,31 +264,14 @@ const Home = () => {
                   }}
                 >
 
-                  <span style={{
-                    position: 'absolute',
-                    top: '15px',
-                    right: '15px',
-                    background: doctor.status === 'online' ? '#28c76f' : '#6c757d',
-                    color: 'white',
-                    padding: '4px 10px',
-                    borderRadius: '20px',
-                    fontSize: '12px',
-                    fontWeight: 'bold'
-                  }}>
+                  <span style={{ position: 'absolute', top: '15px', right: '15px', background: doctor.status === 'online' ? '#28c76f' : '#6c757d', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>
                     {doctor.status === 'online' ? 'Online' : 'Offline'}
                   </span>
 
                   <img
                     src={doctor.img}
                     alt={doctor.name}
-                    style={{
-                      width: '110px',
-                      height: '110px',
-                      borderRadius: '50%',
-                      margin: '0 auto 15px',
-                      objectFit: 'cover',
-                      border: '4px solid #f1f1f1'
-                    }}
+                    style={{ width: '110px', height: '110px', borderRadius: '50%', margin: '0 auto 15px', objectFit: 'cover', border: '4px solid #f1f1f1' }}
                     onError={(e) => { e.target.src = "https://cdn-icons-png.flaticon.com/512/3774/3774299.png"; }}
                   />
 
@@ -262,12 +279,7 @@ const Home = () => {
                     {doctor.name}
                   </h4>
 
-                  <p style={{ 
-                    color: '#007bff',
-                    fontWeight: '600',
-                    marginBottom: '8px',
-                    fontSize: '15px'
-                  }}>
+                  <p style={{ color: '#007bff', fontWeight: '600', marginBottom: '8px', fontSize: '15px' }}>
                     {doctor.specialty || "Chuyên gia y tế"}
                   </p>
 
@@ -278,35 +290,14 @@ const Home = () => {
                     </div>
                   </div>
 
-                  <p style={{ 
-                    fontSize: '14px',
-                    color: '#7f8c8d',
-                    marginBottom: '20px',
-                    height: '40px',
-                    overflow: 'hidden',
-                    lineHeight: '1.4'
-                  }}>
+                  <p style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '20px', height: '40px', overflow: 'hidden', lineHeight: '1.4' }}>
                     {doctor.experience || "Giàu kinh nghiệm chuyên môn"}
                   </p>
 
                   <div style={{ marginTop: 'auto' }}>
                     <button 
-                      onClick={(e) => { 
-                        e.stopPropagation(); 
-                        navigate('/appointment'); 
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '12px',
-                        background: 'linear-gradient(45deg, #007bff, #00b894)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        transition: '0.3s',
-                        fontSize: '14px'
-                      }}
+                      onClick={(e) => { e.stopPropagation(); navigate('/appointment'); }}
+                      style={{ width: '100%', padding: '12px', background: 'linear-gradient(45deg, #007bff, #00b894)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', transition: '0.3s', fontSize: '14px' }}
                     >
                       Đặt lịch ngay
                     </button>

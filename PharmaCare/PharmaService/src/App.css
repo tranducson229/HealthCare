@@ -187,3 +187,16 @@ main {
   color: #636e72;
   border-top: 1px solid #444;
 }
+
+/* Tắt gạch chân cho link và TOÀN BỘ các chữ bên trong link thẻ sản phẩm */
+.product-card-link,
+.product-card-link:hover,
+.product-card-link * {
+  text-decoration: none !important;
+}
+
+/* Đảm bảo màu chữ không bị biến thành màu xanh dương của link mặc định */
+.product-card-link h4,
+.product-card-link span {
+  text-decoration: none !important;
+}

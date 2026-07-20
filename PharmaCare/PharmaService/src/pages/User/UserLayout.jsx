@@ -4,10 +4,10 @@ import { auth, db } from '../../firebaseConfig';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
-// Import các thành phần chung
-import Header from '../../components/Header';
-import Footer from '../../components/Footer';
-// import UserChatWidget from '../../components/UserChatWidget'; // Có thể bỏ nếu đã có trong MainLayout hoặc muốn hiện ở mọi nơi
+// --- BƯỚC 1: IMPORT HEADER VÀ FOOTER ---
+// (Lưu ý: Bạn hãy kiểm tra lại đường dẫn '../../components/...' xem đã khớp với cấu trúc thư mục của bạn chưa nhé)
+import Header from '../../components/Header'; 
+import Footer from '../../components/Footer'; 
 
 import './UserLayout.css';
 
@@ -41,10 +41,12 @@ const UserLayout = () => {
   if (!user) return null;
 
   return (
-    <div className="user-layout-wrapper">
+    <div className="user-layout-wrapper" style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      
+      {/* --- BƯỚC 2: GỌI HEADER RA ĐÂY --- */}
       <Header />
       
-      <div className="user-container">
+      <div className="user-container" style={{ flex: 1 }}>
         <div className="user-grid">
           
           {/* --- SIDEBAR TRÁI --- */}
@@ -69,11 +71,9 @@ const UserLayout = () => {
                 <i className="fas fa-user-circle"></i> Hồ sơ cá nhân
               </NavLink>
 
-              {/* --- ĐƯỜNG DẪN MỚI THÊM VÀO ĐÂY --- */}
               <NavLink to="/MyHealth" className={({ isActive }) => isActive ? "sidebar-link active" : "sidebar-link"}>
                 <i className="fas fa-file-medical-alt"></i> Hồ sơ sức khỏe
               </NavLink>
-              {/* ---------------------------------- */}
               
               <NavLink to="/orders" className={({ isActive }) => isActive ? "sidebar-link active" : "sidebar-link"}>
                 <i className="fas fa-box-open"></i> Đơn mua
@@ -103,7 +103,9 @@ const UserLayout = () => {
         </div>
       </div>
 
+      {/* --- BƯỚC 3: GỌI FOOTER RA ĐÂY --- */}
       <Footer />
+      
     </div>
   );
 };

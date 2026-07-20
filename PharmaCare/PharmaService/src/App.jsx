@@ -64,6 +64,8 @@ import PharmacistInventory from "./pages/Pharmacist/PharmacistInventory";
 import PharmacistOrders from "./pages/Pharmacist/PharmacistOrders";
 import PharmacistPrescriptionHistory from './pages/Pharmacist/PharmacistPrescriptionHistory';
 
+import AdminDashboard from './pages/Admin/AdminDashboard';
+
 // --- Layout Chính cho khách vãng lai ---
 const MainLayout = () => {
   return (
@@ -135,8 +137,12 @@ function App() {
           <Route path="prescription/:recordId" element={<CreatePrescription />} />
           <Route path="history" element={<PharmacistPrescriptionHistory />} />
         </Route>
-
+       <Route path="/admin">
+  <Route index element={<AdminDashboard />} /> {/* Dùng index để trang dashboard hiện ở /admin */}
+  <Route path="dashboard" element={<AdminDashboard />} />
+</Route>
       </Routes>
+     
     </CartProvider>
   );
 }
